@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نتيجة التقسيم وتحليل اللوق | Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'IBM Plex Sans Arabic', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            min-height: 100vh;
+            color: #e2e8f0;
+            padding: 2rem;
+        }
+        .container { max-width: 1100px; margin: 0 auto; }
+        h1 { text-align: center; font-size: 1.75rem; margin-bottom: 0.5rem; font-weight: 700; }
+        .subtitle { text-align: center; color: #94a3b8; margin-bottom: 2rem; font-size: 0.95rem; }
+        .section { margin-bottom: 3rem; }
+        .section h2 { font-size: 1.25rem; margin-bottom: 1rem; color: #38bdf8; }
+        .log-section { background: rgba(30, 41, 59, 0.4); border: 1px solid #475569; border-radius: 12px; padding: 1.25rem; }
+        .section-desc { color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.25rem; }
+        .analysis-summary { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
+        .analysis-summary-card {
+            background: rgba(56, 189, 248, 0.12); border: 1px solid #38bdf8; border-radius: 10px;
+            padding: 1rem 1.25rem; display: flex; align-items: center; gap: 0.75rem; min-width: 180px;
+        }
+        .analysis-summary-icon { font-size: 1.5rem; }
+        .analysis-summary-value { display: block; font-size: 1.1rem; font-weight: 700; color: #38bdf8; }
+        .analysis-summary-label { display: block; font-size: 0.8rem; color: #94a3b8; }
+        .analysis-summary-card.highlight-external { border-color: #22c55e; background: rgba(34, 197, 94, 0.12); }
+        .analysis-summary-card.highlight-external .analysis-summary-value { color: #22c55e; }
+        .analysis-summary-card.behavior-summary-normal .analysis-summary-value { color: #22c55e; }
+        .analysis-summary-card.behavior-summary-suspicious .analysis-summary-value { color: #f87171; }
+        .analysis-summary-card.behavior-summary-suspicious { border-color: #ef4444; background: rgba(239, 68, 68, 0.08); }
+        .ip-cards-list { display: flex; flex-direction: column; gap: 1.25rem; }
+        .internal-ips-section { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #334155; }
+        .internal-ips-section h4 { font-size: 0.95rem; color: #94a3b8; margin-bottom: 0.5rem; }
+        .internal-ips-list { font-size: 0.85rem; color: #64748b; }
+        .internal-ip { font-family: ui-monospace, monospace; color: #94a3b8; margin-left: 0.5rem; }
+        .internal-count { color: #64748b; margin-left: 0.25rem; }
+        .no-external-msg { color: #fbbf24; padding: 1rem; background: rgba(251, 191, 36, 0.1); border-radius: 8px; }
+        .log-summary-table-wrap { overflow-x: auto; margin-bottom: 2rem; border: 1px solid #334155; border-radius: 10px; background: rgba(15, 23, 42, 0.6); }
+        .log-summary-table-title { font-size: 1rem; color: #38bdf8; margin-bottom: 0.75rem; padding: 0 1rem; padding-top: 1rem; }
+        .log-summary-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .log-summary-table th, .log-summary-table td { padding: 0.6rem 0.75rem; text-align: right; border-bottom: 1px solid #334155; }
+        .log-summary-table th { background: #1e293b; color: #38bdf8; font-weight: 600; }
+        .log-summary-table tbody tr:hover { background: rgba(56, 189, 248, 0.08); }
+        .log-summary-table .table-rank { color: #94a3b8; width: 40px; }
+        .log-summary-table .table-ip { font-family: ui-monospace, monospace; color: #38bdf8; font-weight: 600; }
+        .log-summary-table .table-count { font-weight: 700; color: #e2e8f0; }
+        .log-summary-table .table-activity { max-width: 200px; color: #94a3b8; font-size: 0.85rem; }
+        .badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; }
+        .badge.attack-badge { background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid #ef4444; }
+        .badge.normal-badge { background: rgba(34, 197, 94, 0.25); color: #22c55e; border: 1px solid #22c55e; }
+        .badge.threat-high { background: rgba(239, 68, 68, 0.3); color: #fca5a5; border: 1px solid #ef4444; font-weight: 700; }
+        .badge.threat-mid { background: rgba(245, 158, 11, 0.3); color: #fcd34d; border: 1px solid #f59e0b; font-weight: 700; }
+        .badge.threat-low { background: rgba(34, 197, 94, 0.25); color: #86efac; border: 1px solid #22c55e; font-weight: 600; }
+        .log-summary-table .table-user { font-weight: 600; color: #e2e8f0; }
+        .osint-section { margin-bottom: 2rem; border: 1px solid #334155; border-radius: 10px; background: rgba(15, 23, 42, 0.5); padding: 1rem; }
+        .osint-title { font-size: 1.1rem; color: #22c55e; margin-bottom: 0.35rem; }
+        .osint-desc { color: #94a3b8; font-size: 0.85rem; margin-bottom: 1rem; }
+        .osint-table-wrap { overflow-x: auto; }
+        .osint-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+        .osint-table th, .osint-table td { padding: 0.5rem 0.6rem; text-align: right; border-bottom: 1px solid #334155; }
+        .osint-table th { background: #1e293b; color: #22c55e; font-weight: 600; }
+        .osint-table tbody tr:hover { background: rgba(34, 197, 94, 0.06); }
+        .osint-table .osint-rank { color: #64748b; width: 36px; }
+        .osint-table .osint-ip { font-family: ui-monospace, monospace; color: #38bdf8; font-weight: 600; }
+        .osint-table .osint-count { font-weight: 700; color: #e2e8f0; }
+        .ip-analysis-card {
+            background: rgba(30, 41, 59, 0.8); border: 1px solid #334155; border-radius: 12px; overflow: hidden;
+        }
+        .ip-card-header { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; padding: 1rem 1.25rem; background: rgba(15, 23, 42, 0.5); }
+        .ip-rank { background: #38bdf8; color: #0f172a; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.85rem; }
+        .ip-address { font-family: ui-monospace, monospace; font-weight: 600; color: #38bdf8; font-size: 1.05rem; }
+        .ip-events { color: #e2e8f0; font-weight: 600; }
+        .ip-share { color: #94a3b8; font-size: 0.9rem; }
+        .ip-card-bar { height: 6px; background: #334155; }
+        .ip-card-bar-fill { height: 100%; background: linear-gradient(90deg, #38bdf8, #818cf8); transition: width 0.3s; }
+        .ip-card-meta { padding: 0.75rem 1.25rem; background: rgba(15, 23, 42, 0.4); border-bottom: 1px solid #334155; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+        .location-block { display: flex; align-items: center; gap: 0.35rem; }
+        .location-icon { font-size: 1.1rem; }
+        .location-text { color: #38bdf8; font-weight: 600; }
+        .isp-block { color: #94a3b8; font-size: 0.9rem; }
+        .isp-value { color: #e2e8f0; font-weight: 500; }
+        .behavior-block { padding: 0.35rem 0.75rem; border-radius: 8px; font-size: 0.9rem; }
+        .behavior-block .behavior-label { margin-left: 0.25rem; }
+        .behavior-block.behavior-normal { background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e; color: #22c55e; }
+        .behavior-block.behavior-suspicious { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #f87171; }
+        .behavior-reasons { display: block; font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem; }
+        .ip-card-body { padding: 1rem 1.25rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+        @media (max-width: 768px) { .ip-card-body { grid-template-columns: 1fr; } }
+        .ip-data-block h4, .ip-log-block h4 { font-size: 0.9rem; color: #94a3b8; margin-bottom: 0.5rem; }
+        .ip-data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .ip-data-table .data-label { color: #64748b; padding: 0.35rem 0; width: 140px; }
+        .ip-data-table .data-value { color: #e2e8f0; }
+        .ip-data-table .private-notice { color: #fbbf24; font-size: 0.85rem; padding: 0.5rem 0; }
+        .ip-data-table .log-analysis-header { color: #38bdf8; font-weight: 600; padding-top: 0.75rem; }
+        .ip-log-block { border-right: 1px solid #334155; padding-right: 1rem; }
+        @media (max-width: 768px) { .ip-log-block { border-right: none; padding-right: 0; border-top: 1px solid #334155; padding-top: 1rem; } }
+        .ip-log-samples { background: #0f172a; border-radius: 8px; padding: 0.75rem; font-family: ui-monospace, monospace; font-size: 0.8rem; color: #94a3b8; max-height: 160px; overflow-y: auto; }
+        .log-sample-line { margin-bottom: 0.25rem; word-break: break-all; }
+        .summary {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            align-items: center;
+        }
+        .summary-item { display: flex; flex-direction: column; gap: 0.25rem; }
+        .summary-item .label { color: #94a3b8; font-size: 0.85rem; }
+        .summary-item .value { font-size: 1.25rem; font-weight: 600; color: #38bdf8; }
+        .path { word-break: break-all; font-size: 0.85rem; color: #94a3b8; }
+        .path-item { flex: 1; min-width: 200px; }
+        .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+        .card {
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 1rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+        .card-icon { font-size: 1.5rem; }
+        .card-body { flex: 1; min-width: 0; }
+        .card h3 { font-size: 0.95rem; margin-bottom: 0.35rem; word-break: break-all; }
+        .card .size { color: #38bdf8; font-weight: 600; font-size: 1rem; }
+        .bar { height: 6px; background: #334155; border-radius: 3px; margin-top: 0.5rem; overflow: hidden; }
+        .bar-fill { height: 100%; background: linear-gradient(90deg, #38bdf8, #818cf8); border-radius: 3px; }
+        .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid #334155; background: rgba(30, 41, 59, 0.6); }
+        .log-table { width: 100%; border-collapse: collapse; }
+        .log-table th, .log-table td { padding: 0.75rem 1rem; text-align: right; border-bottom: 1px solid #334155; }
+        .log-table th { color: #94a3b8; font-weight: 600; font-size: 0.9rem; }
+        .log-table tbody tr:hover { background: rgba(56, 189, 248, 0.08); }
+        .ip-cell { font-family: ui-monospace, monospace; color: #38bdf8; }
+        .country-cell { font-weight: 600; color: #a5b4fc; }
+        .count-cell { font-weight: 600; }
+        .samples-cell { max-width: 420px; }
+        .samples-wrap { font-size: 0.8rem; color: #94a3b8; max-height: 160px; overflow-y: auto; }
+        .geo-line { margin-bottom: 0.25rem; }
+        .geo-line.country { font-weight: 600; color: #a5b4fc; }
+        .samples-label { margin-top: 0.5rem; margin-bottom: 0.25rem; color: #64748b; font-size: 0.75rem; }
+        .sample-line { margin-bottom: 0.35rem; word-break: break-all; }
+        .sample-line.text-muted { color: #64748b; }
+        .no-data { color: #94a3b8; padding: 1rem; }
+        .timestamp { color: #64748b; font-size: 0.8rem; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>نتيجة التقسيم وتحليل اللوق</h1>
+        <p class="subtitle">تقسيم الملف إلى أجزاء + استخراج IP والدولة وجميع البيانات المرتبطة</p>
+        
+        <section class="section log-section">
+            <h2>تحليل سجل اللوق — العناوين الخارجية (من الإنترنت)</h2>
+            <p class="section-desc">عرض العناوين الخارجية مع: الموقع (الدولة والمدينة)، مزود الخدمة، تحليل سلوك المهاجم (هجوم / دخول طبيعي)، وتفاصيل تحليل اللوق. العناوين الداخلية في الأسفل.</p>
+            <div class="analysis-summary">
+            <div class="analysis-summary-card">
+                <span class="analysis-summary-icon">📊</span>
+                <div>
+                    <span class="analysis-summary-value">220</span>
+                    <span class="analysis-summary-label">إجمالي أحداث اللوق</span>
+                </div>
+            </div>
+            <div class="analysis-summary-card highlight-external">
+                <span class="analysis-summary-icon">🌍</span>
+                <div>
+                    <span class="analysis-summary-value">0</span>
+                    <span class="analysis-summary-label">عناوين خارجية (من الإنترنت)</span>
+                </div>
+            </div>
+            <div class="analysis-summary-card">
+                <span class="analysis-summary-icon">🏠</span>
+                <div>
+                    <span class="analysis-summary-value">3</span>
+                    <span class="analysis-summary-label">عناوين داخلية (شبكة محلية)</span>
+                </div>
+            </div>
+            <div class="analysis-summary-card">
+                <span class="analysis-summary-icon">📌</span>
+                <div>
+                    <span class="analysis-summary-value">لا توجد عناوين خارجية</span>
+                    <span class="analysis-summary-label">أعلى IP خارجي من حيث النشاط</span>
+                </div>
+            </div></div>
+            
+            <div class="log-summary-table-wrap">
+                <h3 class="log-summary-table-title">اليوزر · نوع الهجوم · مستوى التهديد</h3>
+                <table class="log-summary-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>اليوزر</th>
+                            <th>IP</th>
+                            <th>نوع الهجوم</th>
+                            <th>مستوى التهديد</th>
+                            <th>عدد الطلبات</th>
+                            <th>الدولة</th>
+                            <th>تحليل الحركة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            <tr>
+                <td class="table-rank">1</td>
+                <td class="table-user">192.168.1.10</td>
+                <td class="table-ip">192.168.1.10</td>
+                <td><span class="badge normal-badge">دخول طبيعي</span></td>
+                <td><span class="badge threat-mid">متوسط</span></td>
+                <td class="table-count">112</td>
+                <td class="table-country">— (خاص)</td>
+                <td class="table-activity">GET(112) |  مسارات: /page, /api/data</td>
+            </tr>
+            <tr>
+                <td class="table-rank">2</td>
+                <td class="table-user">10.0.0.5</td>
+                <td class="table-ip">10.0.0.5</td>
+                <td><span class="badge normal-badge">دخول طبيعي</span></td>
+                <td><span class="badge threat-mid">متوسط</span></td>
+                <td class="table-count">54</td>
+                <td class="table-country">— (خاص)</td>
+                <td class="table-activity">POST(54) |  مسارات: /api/login</td>
+            </tr>
+            <tr>
+                <td class="table-rank">3</td>
+                <td class="table-user">172.16.0.3</td>
+                <td class="table-ip">172.16.0.3</td>
+                <td><span class="badge normal-badge">دخول طبيعي</span></td>
+                <td><span class="badge threat-mid">متوسط</span></td>
+                <td class="table-count">54</td>
+                <td class="table-country">— (خاص)</td>
+                <td class="table-activity">GET(54) |  مسارات: /static/css</td>
+            </tr></tbody>
+                </table>
+            </div>
+            
+            <div class="osint-section">
+                <h3 class="osint-title">قسم OSINT — استخبارات المصادر المفتوحة</h3>
+                <p class="osint-desc">الدولة، المدينة، ISP، المنظمة، Reverse DNS، NetName (WHOIS). المصدَر: log_analysis.json. لتحديث البيانات: python3 osint_report.py</p>
+                <div class="osint-table-wrap">
+                    <table class="osint-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>IP</th>
+                                <th>عدد الطلبات</th>
+                                <th>الدولة</th>
+                                <th>المدينة</th>
+                                <th>ISP</th>
+                                <th>المنظمة</th>
+                                <th>Reverse DNS</th>
+                                <th>NetName</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                    <tr>
+                        <td class="osint-rank">1</td>
+                        <td class="osint-ip">8.8.8.8</td>
+                        <td class="osint-count">2</td>
+                        <td class="osint-country">United States</td>
+                        <td class="osint-city">Ashburn</td>
+                        <td class="osint-isp">Google LLC</td>
+                        <td class="osint-org">Google Public DNS</td>
+                        <td class="osint-rdns">dns.google</td>
+                        <td class="osint-netname">GOGL</td>
+                    </tr>
+                    <tr>
+                        <td class="osint-rank">2</td>
+                        <td class="osint-ip">1.1.1.1</td>
+                        <td class="osint-count">2</td>
+                        <td class="osint-country">Hong Kong</td>
+                        <td class="osint-city">Hong Kong</td>
+                        <td class="osint-isp">Cloudflare, Inc</td>
+                        <td class="osint-org">APNIC and Cloudflare DNS Resolver p</td>
+                        <td class="osint-rdns">one.one.one.one</td>
+                        <td class="osint-netname">—</td>
+                    </tr>
+                    <tr>
+                        <td class="osint-rank">3</td>
+                        <td class="osint-ip">77.88.47.50</td>
+                        <td class="osint-count">2</td>
+                        <td class="osint-country">Russia</td>
+                        <td class="osint-city">Moscow</td>
+                        <td class="osint-isp">Yandex LLC</td>
+                        <td class="osint-org">Yandex enterprise network</td>
+                        <td class="osint-rdns">77-88-47-50.spider.yandex.com</td>
+                        <td class="osint-netname">—</td>
+                    </tr>
+                    <tr>
+                        <td class="osint-rank">4</td>
+                        <td class="osint-ip">66.249.66.1</td>
+                        <td class="osint-count">2</td>
+                        <td class="osint-country">United States</td>
+                        <td class="osint-city">Mountain View</td>
+                        <td class="osint-isp">Google LLC</td>
+                        <td class="osint-org">Google LLC</td>
+                        <td class="osint-rdns">crawl-66-249-66-1.googlebot.com</td>
+                        <td class="osint-netname">GOOGLE</td>
+                    </tr>
+                    <tr>
+                        <td class="osint-rank">5</td>
+                        <td class="osint-ip">192.168.1.10</td>
+                        <td class="osint-count">2</td>
+                        <td class="osint-country">— (خاص)</td>
+                        <td class="osint-city">—</td>
+                        <td class="osint-isp">—</td>
+                        <td class="osint-org">—</td>
+                        <td class="osint-rdns">—</td>
+                        <td class="osint-netname">—</td>
+                    </tr></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="ip-cards-list"></div>
+            <p class="no-external-msg">لم يُعثر على عناوين خارجية في هذا اللوق. جميع العناوين داخلية (شبكة محلية). راجع قسم العناوين الداخلية أدناه.</p>
+            
+            <div class="internal-ips-section"><h4>العناوين الداخلية (شبكة محلية) — 3 عنوان</h4><div class="internal-ips-list"><span class="internal-ip">192.168.1.10</span> <span class="internal-count">112 حدث</span> <span class="internal-ip">10.0.0.5</span> <span class="internal-count">54 حدث</span> <span class="internal-ip">172.16.0.3</span> <span class="internal-count">54 حدث</span> </div></div>
+            <p class="timestamp">آخر تحديث: 2026-04-19 14:56:27</p>
+        </section>
+        
+    </div>
+</body>
+</html>
