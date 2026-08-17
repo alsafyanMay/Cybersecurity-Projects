@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>محلل اللوق الأمني | SOC Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f172a;
+      --bg2: #1e293b;
+      --border: #334155;
+      --blue: #38bdf8;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --dim: #64748b;
+    }
+    body {
+      font-family: 'IBM Plex Sans Arabic', sans-serif;
+      background: linear-gradient(135deg, var(--bg) 0%, var(--bg2) 50%, var(--bg) 100%);
+      min-height: 100vh;
+      color: var(--text);
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    /* ─── Header ─── */
+    .header { text-align: center; margin-bottom: 2.5rem; }
+    .header h1 { font-size: 2rem; font-weight: 700; color: var(--blue); margin-bottom: 0.4rem; }
+    .header p { color: var(--muted); font-size: 0.95rem; }
+
+    /* ─── Upload Zone ─── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 2rem;
+      background: rgba(30,41,59,0.4);
+    }
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--blue);
+      background: rgba(56,189,248,0.08);
+    }
+    .upload-zone .icon { font-size: 3rem; display: block; margin-bottom: 1rem; }
+    .upload-zone h2 { font-size: 1.2rem; color: var(--blue); margin-bottom: 0.5rem; }
+    .upload-zone p { color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem; }
+    .btn {
+      display: inline-block;
+      padding: 0.6rem 1.5rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--blue); color: #0f172a; }
+    .btn-danger { background: var(--red); color: #fff; }
+    #fileInput { display: none; }
+    .file-info { font-size: 0.9rem; color: var(--green); margin-top: 0.75rem; }
+
+    /* ─── Progress ─── */
+    .progress-wrap { margin-bottom: 2rem; display: none; }
+    .progress-label { color: var(--muted); font-size: 0.9rem; margin-bottom: 0.4rem; }
+    .progress-bar-outer { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .progress-bar-inner { height: 100%; background: linear-gradient(90deg, var(--blue), #818cf8); border-radius: 4px; transition: width 0.3s; width: 0; }
+    .progress-text { color: var(--dim); font-size: 0.8rem; margin-top: 0.3rem; }
+
+    /* ─── Summary Cards ─── */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .sum-card {
+      background: rgba(30,41,59,0.8);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .sum-card.blue  { border-color: var(--blue);  }
+    .sum-card.green { border-color: var(--green); }
+    .sum-card.red   { border-color: var(--red);   }
+    .sum-card.yellow{ border-color: var(--yellow);}
+    .sum-icon { font-size: 1.6rem; }
+    .sum-value { display: block; font-size: 1.15rem; font-weight: 700; }
+    .sum-card.blue  .sum-value { color: var(--blue); }
+    .sum-card.green .sum-value { color: var(--green); }
+    .sum-card.red   .sum-value { color: #f87171; }
+    .sum-card.yellow .sum-value { color: #fcd34d; }
+    .sum-label { display: block; font-size: 0.78rem; color: var(--muted); margin-top: 0.1rem; }
+
+    /* ─── Charts ─── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 600px) { .charts-grid { grid-template-columns: 1fr; } }
+    .chart-card {
+      background: rgba(30,41,59,0.7);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+    .chart-title { font-size: 0.9rem; color: var(--blue); font-weight: 600; margin-bottom: 0.75rem; }
+    .chart-card canvas { max-height: 220px; }
+
+    /* ─── Section ─── */
+    .section {
+      background: rgba(30,41,59,0.5);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .section-title { font-size: 1.1rem; color: var(--blue); font-weight: 600; margin-bottom: 1rem; }
+
+    /* ─── Badges ─── */
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .badge-attack  { background: rgba(239,68,68,0.25); color: #f87171; border: 1px solid var(--red); }
+    .badge-normal  { background: rgba(34,197,94,0.25); color: var(--green); border: 1px solid var(--green); }
+    .badge-high    { background: rgba(239,68,68,0.3);  color: #fca5a5; border: 1px solid var(--red); }
+    .badge-mid     { background: rgba(245,158,11,0.3); color: #fcd34d; border: 1px solid var(--yellow); }
+    .badge-low     { background: rgba(34,197,94,0.25); color: #86efac; border: 1px solid var(--green); }
+
+    /* ─── Table ─── */
+    .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th, td { padding: 0.6rem 0.8rem; text-align: right; border-bottom: 1px solid var(--border); }
+    th { background: #1e293b; color: var(--blue); font-weight: 600; white-space: nowrap; }
+    tbody tr:hover { background: rgba(56,189,248,0.07); }
+    .td-rank { color: var(--dim); width: 36px; }
+    .td-ip { font-family: ui-monospace, monospace; color: var(--blue); font-weight: 600; }
+    .td-count { font-weight: 700; color: var(--text); }
+    .td-muted { color: var(--muted); font-size: 0.82rem; max-width: 200px; }
+
+    /* ─── IP Cards ─── */
+    .ip-cards { display: flex; flex-direction: column; gap: 1rem; }
+    .ip-card {
+      background: rgba(30,41,59,0.8);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .ip-card-head {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem;
+      padding: 0.85rem 1.2rem;
+      background: rgba(15,23,42,0.5);
+    }
+    .ip-card-rank {
+      background: var(--blue); color: #0f172a;
+      font-weight: 700; padding: 0.15rem 0.45rem;
+      border-radius: 5px; font-size: 0.82rem;
+    }
+    .ip-card-addr { font-family: ui-monospace,monospace; font-weight: 600; color: var(--blue); font-size: 1rem; }
+    .ip-card-events { color: var(--text); font-weight: 600; }
+    .ip-card-share { color: var(--muted); font-size: 0.88rem; }
+    .ip-bar { height: 5px; background: var(--border); }
+    .ip-bar-fill { height: 100%; background: linear-gradient(90deg, var(--blue), #818cf8); }
+    .ip-card-meta {
+      padding: 0.65rem 1.2rem;
+      background: rgba(15,23,42,0.3);
+      border-bottom: 1px solid var(--border);
+      display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;
+      font-size: 0.88rem;
+    }
+    .meta-loc { color: var(--blue); font-weight: 600; }
+    .meta-isp { color: var(--muted); }
+    .meta-behavior {
+      padding: 0.3rem 0.65rem; border-radius: 7px; font-size: 0.85rem;
+    }
+    .meta-behavior.b-normal { background: rgba(34,197,94,0.15); border: 1px solid var(--green); color: var(--green); }
+    .meta-behavior.b-attack { background: rgba(239,68,68,0.15); border: 1px solid var(--red); color: #f87171; }
+    .ip-card-body {
+      padding: 1rem 1.2rem;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;
+    }
+    @media (max-width: 680px) { .ip-card-body { grid-template-columns: 1fr; } }
+    .ip-card-body h4 { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.5rem; }
+    .data-table { width: 100%; font-size: 0.88rem; border-collapse: collapse; }
+    .data-table td { padding: 0.3rem 0; vertical-align: top; }
+    .data-table .dl { color: var(--dim); width: 130px; }
+    .data-table .dv { color: var(--text); }
+    .log-samples {
+      background: #0f172a;
+      border-radius: 8px; padding: 0.65rem;
+      font-family: ui-monospace,monospace; font-size: 0.78rem;
+      color: var(--muted); max-height: 140px; overflow-y: auto;
+    }
+    .log-line { margin-bottom: 0.2rem; word-break: break-all; }
+    .ip-log-block { border-right: 1px solid var(--border); padding-right: 1rem; }
+    @media (max-width: 680px) { .ip-log-block { border-right: none; padding-right: 0; border-top: 1px solid var(--border); padding-top: 1rem; } }
+
+    /* ─── Hidden / Utility ─── */
+    .hidden { display: none !important; }
+    .timestamp { color: var(--dim); font-size: 0.78rem; margin-top: 1rem; }
+
+    /* ─── Search ─── */
+    .search-bar {
+      width: 100%; padding: 0.6rem 1rem; border-radius: 8px;
+      border: 1px solid var(--border); background: rgba(15,23,42,0.7);
+      color: var(--text); font-size: 0.9rem; margin-bottom: 1rem;
+      outline: none; transition: border-color 0.2s;
+    }
+    .search-bar:focus { border-color: var(--blue); }
+
+    /* ─── Filter buttons ─── */
+    .filter-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+    .filter-btn {
+      padding: 0.35rem 0.85rem; border-radius: 7px; font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; border: 1px solid var(--border); background: rgba(30,41,59,0.6); color: var(--muted);
+      transition: all 0.15s;
+    }
+    .filter-btn.active, .filter-btn:hover { border-color: var(--blue); color: var(--blue); background: rgba(56,189,248,0.1); }
+    .filter-btn.f-attack.active { border-color: var(--red); color: #f87171; background: rgba(239,68,68,0.1); }
+    .filter-btn.f-normal.active { border-color: var(--green); color: var(--green); background: rgba(34,197,94,0.1); }
+
+    /* ─── Actions ─── */
+    .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+
+    /* ─── Pagination ─── */
+    .pagination { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; justify-content: center; }
+    .page-btn {
+      padding: 0.3rem 0.7rem; border-radius: 6px; border: 1px solid var(--border);
+      background: rgba(30,41,59,0.6); color: var(--muted); cursor: pointer; font-size: 0.85rem;
+      transition: all 0.15s;
+    }
+    .page-btn.active, .page-btn:hover { border-color: var(--blue); color: var(--blue); background: rgba(56,189,248,0.1); }
+
+    /* ─── Toast ─── */
+    .toast {
+      position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+      background: var(--bg2); border: 1px solid var(--blue); border-radius: 10px;
+      padding: 0.75rem 1.5rem; color: var(--text); font-size: 0.9rem;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4); transition: opacity 0.3s;
+      z-index: 999; pointer-events: none;
+    }
+    .toast.hidden { opacity: 0; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>🔐 محلل اللوق الأمني</h1>
+    <p>ارفع ملف اللوق (CSV/TXT) وستحصلين على تحليل كامل: IP، الدولة، الطرق، السلوك، مستوى التهديد</p>
+  </div>
+
+  <!-- Upload Zone -->
+  <div class="upload-zone" id="dropZone">
+    <span class="icon">📂</span>
+    <h2>اسحب ملف اللوق هنا أو انقري للاختيار</h2>
+    <p>يدعم: .txt · .csv · .log — حجم غير محدود (المعالجة في المتصفح)</p>
+    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">اختيار ملف</button>
+    <input type="file" id="fileInput" accept=".txt,.csv,.log" />
+    <p class="file-info" id="fileInfo"></p>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-label" id="progressLabel">جاري المعالجة…</div>
+    <div class="progress-bar-outer"><div class="progress-bar-inner" id="progressBar"></div></div>
+    <div class="progress-text" id="progressText"></div>
+  </div>
+
+  <!-- Actions -->
+  <div class="actions hidden" id="actionBar">
+    <button class="btn btn-danger" onclick="resetAll()">🗑 مسح وتحليل ملف جديد</button>
+    <button class="btn btn-primary" onclick="exportJSON()">⬇ تصدير JSON</button>
+    <button class="btn btn-primary" onclick="exportCSV()">⬇ تصدير CSV</button>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="summary-grid hidden" id="summaryGrid">
+    <div class="sum-card blue">
+      <span class="sum-icon">📊</span>
+      <div><span class="sum-value" id="sc-total">—</span><span class="sum-label">إجمالي أحداث اللوق</span></div>
+    </div>
+    <div class="sum-card blue">
+      <span class="sum-icon">🌐</span>
+      <div><span class="sum-value" id="sc-unique">—</span><span class="sum-label">عناوين IP فريدة</span></div>
+    </div>
+    <div class="sum-card green">
+      <span class="sum-icon">🌍</span>
+      <div><span class="sum-value" id="sc-public">—</span><span class="sum-label">عناوين خارجية</span></div>
+    </div>
+    <div class="sum-card yellow">
+      <span class="sum-icon">🏠</span>
+      <div><span class="sum-value" id="sc-private">—</span><span class="sum-label">عناوين داخلية</span></div>
+    </div>
+    <div class="sum-card red">
+      <span class="sum-icon">🚨</span>
+      <div><span class="sum-value" id="sc-attack">—</span><span class="sum-label">مهاجم / مشبوه</span></div>
+    </div>
+    <div class="sum-card green">
+      <span class="sum-icon">✅</span>
+      <div><span class="sum-value" id="sc-normal">—</span><span class="sum-label">دخول طبيعي</span></div>
+    </div>
+    <div class="sum-card blue">
+      <span class="sum-icon">📌</span>
+      <div><span class="sum-value" id="sc-topip" style="font-size:0.85rem">—</span><span class="sum-label">أعلى IP نشاطاً</span></div>
+    </div>
+    <div class="sum-card red">
+      <span class="sum-icon">🔴</span>
+      <div><span class="sum-value" id="sc-highrisk">—</span><span class="sum-label">تهديد عالي</span></div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-grid hidden" id="chartsGrid">
+    <div class="chart-card">
+      <div class="chart-title">توزيع مستوى التهديد</div>
+      <canvas id="chartThreat"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">نوع الهجوم (هجوم vs طبيعي)</div>
+      <canvas id="chartBehavior"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">أعلى 10 عناوين IP نشاطاً</div>
+      <canvas id="chartTopIPs"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">أكثر طرق HTTP استخداماً</div>
+      <canvas id="chartMethods"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">توزيع أكواد الاستجابة</div>
+      <canvas id="chartStatuses"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">أعلى المسارات طلباً</div>
+      <canvas id="chartPaths"></canvas>
+    </div>
+  </div>
+
+  <!-- Summary Table -->
+  <div class="section hidden" id="tableSection">
+    <div class="section-title">جدول التحليل — جميع عناوين IP</div>
+    <input class="search-bar" id="searchBar" placeholder="🔍 ابحثي عن IP، دولة، نوع…" oninput="applyFilters()" />
+    <div class="filter-row">
+      <button class="filter-btn active" data-f="all" onclick="setFilter('all',this)">الكل</button>
+      <button class="filter-btn f-attack" data-f="attack" onclick="setFilter('attack',this)">مشبوه / هجوم</button>
+      <button class="filter-btn f-normal" data-f="normal" onclick="setFilter('normal',this)">طبيعي</button>
+      <button class="filter-btn" data-f="high" onclick="setFilter('high',this)">تهديد عالي</button>
+      <button class="filter-btn" data-f="mid" onclick="setFilter('mid',this)">تهديد متوسط</button>
+      <button class="filter-btn" data-f="low" onclick="setFilter('low',this)">تهديد منخفض</button>
+      <button class="filter-btn" data-f="public" onclick="setFilter('public',this)">خارجي</button>
+      <button class="filter-btn" data-f="private" onclick="setFilter('private',this)">داخلي</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="td-rank">#</th>
+            <th>IP</th>
+            <th>نوع الهجوم</th>
+            <th>مستوى التهديد</th>
+            <th>الطلبات</th>
+            <th>النسبة</th>
+            <th>الدولة</th>
+            <th>أبرز الطرق</th>
+            <th>أبرز الأكواد</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+    <p class="timestamp" id="analysisTimestamp"></p>
+  </div>
+
+  <!-- IP Cards Section -->
+  <div class="section hidden" id="cardsSection">
+    <div class="section-title">تفاصيل العناوين (بطاقات تفصيلية)</div>
+    <div class="ip-cards" id="ipCards"></div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast hidden" id="toast"></div>
+
+<script>
+'use strict';
+
+// ─── State ───────────────────────────────────────────────────
+let ALL_DATA = [];      // enriched IP rows
+let TOTAL_LINES = 0;
+let FILTERED = [];
+let currentFilter = 'all';
+let currentPage = 1;
+const PAGE_SIZE = 50;
+let CHARTS = {};
+
+// ─── Upload / Drop ───────────────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+function handleFile(file) {
+  document.getElementById('fileInfo').textContent = `📄 ${file.name}  (${fmtSize(file.size)})`;
+  showProgress(true);
+  setProgress(0, `جاري قراءة ${file.name}…`);
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    processText(text);
+  };
+  reader.onerror = () => showToast('خطأ في قراءة الملف!');
+  reader.readAsText(file, 'utf-8');
+}
+
+// ─── Core Analysis ───────────────────────────────────────────
+const IP_REGEX = /\b(\d{1,3}\.){3}\d{1,3}\b/;
+const PRIVATE_REGEX = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/;
+
+function isPrivate(ip) { return PRIVATE_REGEX.test(ip); }
+
+function extractIP(line) {
+  const m = line.match(IP_REGEX);
+  return m ? m[0] : null;
+}
+
+function parseLogLine(line) {
+  line = line.trim();
+  if (!line || !line.includes(',')) return null;
+  const parts = line.split(',').map(p => p.trim());
+  if (parts.length < 2) return null;
+  const ip = IP_REGEX.test(parts[0]) ? parts[0] : extractIP(line);
+  const out = { ip: ip || parts[0], raw: line };
+  if (parts.length >= 5) {
+    out.date   = parts[1];
+    out.method = parts[2].length < 10 ? parts[2].toUpperCase() : parts[2];
+    out.path   = parts[3];
+    out.status = parts[4];
+  } else if (parts.length >= 3) {
+    out.date   = parts[1];
+    out.method = parts[2].length < 10 ? parts[2].toUpperCase() : '';
+    out.path   = '';
+    out.status = '';
+  } else {
+    out.date = parts[1] || '';
+    out.method = out.path = out.status = '';
+  }
+  if (out.path && out.path.includes('?')) {
+    const q = out.path.split('?')[1];
+    for (const kv of q.split('&')) {
+      const [k, v] = kv.split('=');
+      if (k && ['username','user','login','uname'].includes(k.toLowerCase()) && v) {
+        out.username = v.slice(0, 100);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+function processText(text) {
+  const lines = text.split(/\r?\n/);
+  const total = lines.length;
+  const ipMap = {};
+  let processed = 0;
+  const CHUNK = 50000;
+
+  function processChunk(start) {
+    const end = Math.min(start + CHUNK, total);
+    for (let i = start; i < end; i++) {
+      const line = lines[i];
+      if (!line.trim()) continue;
+      processed++;
+      const ip = extractIP(line);
+      if (!ip) continue;
+      if (!ipMap[ip]) {
+        ipMap[ip] = { ip, count: 0, samples: [], methods: {}, paths: {}, statuses: {}, usernames: new Set() };
+      }
+      const d = ipMap[ip];
+      d.count++;
+      if (d.samples.length < 5) d.samples.push(line.trim().slice(0, 300));
+      const p = parseLogLine(line);
+      if (p) {
+        if (p.method) d.methods[p.method] = (d.methods[p.method] || 0) + 1;
+        if (p.path)   d.paths[p.path]     = (d.paths[p.path]   || 0) + 1;
+        if (p.status) d.statuses[p.status]= (d.statuses[p.status]||0)+ 1;
+        if (p.username) d.usernames.add(p.username);
+      }
+    }
+    const pct = Math.round(end / total * 90);
+    setProgress(pct, `معالجة: ${fmtNum(end)} / ${fmtNum(total)} سطر — ${Object.keys(ipMap).length} IP فريد`);
+    if (end < total) {
+      setTimeout(() => processChunk(end), 0);
+    } else {
+      finalize(ipMap, processed);
+    }
+  }
+
+  processChunk(0);
+}
+
+function analyzeBehavior(item, totalLines) {
+  const count = item.count;
+  const statuses = item.statuses;
+  const paths = item.paths;
+  const methods = item.methods;
+  const reasons = [];
+  const errCodes = Object.keys(statuses).filter(s => s.startsWith('4') || s.startsWith('5'));
+  const errCount = errCodes.reduce((a, s) => a + (statuses[s] || 0), 0);
+  const errRate = count ? errCount / count * 100 : 0;
+  const uniquePaths = Object.keys(paths).length;
+  const share = totalLines ? count / totalLines * 100 : 0;
+  if (errRate >= 40) reasons.push('نسبة عالية من استجابات الخطأ (4xx/5xx)');
+  if (uniquePaths > 30 && count > 100) reasons.push('تنوع غير اعتيادي في المسارات (يشبه المسح)');
+  if (share > 50 && count > 500) reasons.push('حجم نشاط مرتفع جداً مقارنة بباقي اللوق');
+  const postCount = methods['POST'] || 0;
+  if (postCount > count * 0.8 && count > 100) reasons.push('تركيز على طلبات POST (محاولات تسجيل دخول)');
+  return reasons.length
+    ? { label: 'مشبوه', reasons }
+    : { label: 'طبيعي', reasons: ['نمط النشاط ضمن المعدل الاعتيادي'] };
+}
+
+function getThreat(item, totalLines) {
+  const b = analyzeBehavior(item, totalLines);
+  const share = totalLines ? item.count / totalLines * 100 : 0;
+  if (b.label === 'مشبوه') return 'عالي';
+  if (share > 15 || item.count > 2000) return 'متوسط';
+  return 'منخفض';
+}
+
+function finalize(ipMap, totalLines) {
+  TOTAL_LINES = totalLines;
+  setProgress(95, 'ترتيب النتائج…');
+  const sorted = Object.values(ipMap).sort((a, b) => b.count - a.count).map(d => ({
+    ...d,
+    usernames: [...d.usernames],
+    isPrivate: isPrivate(d.ip),
+    behavior: analyzeBehavior(d, totalLines),
+    threat: getThreat(d, totalLines),
+    country: isPrivate(d.ip) ? '— (داخلي)' : '—',
+    city: '', isp: '', regionName: ''
+  }));
+  ALL_DATA = sorted;
+  setProgress(100, 'اكتمل التحليل!');
+  setTimeout(() => {
+    showProgress(false);
+    renderUI();
+  }, 400);
+}
+
+// ─── Render UI ───────────────────────────────────────────────
+function renderUI() {
+  const pub = ALL_DATA.filter(d => !d.isPrivate);
+  const prv = ALL_DATA.filter(d => d.isPrivate);
+  const attacks = ALL_DATA.filter(d => d.behavior.label === 'مشبوه').length;
+  const normal  = ALL_DATA.length - attacks;
+  const highRisk = ALL_DATA.filter(d => d.threat === 'عالي').length;
+
+  // Summary cards
+  show('summaryGrid');
+  $('sc-total').textContent   = fmtNum(TOTAL_LINES);
+  $('sc-unique').textContent  = fmtNum(ALL_DATA.length);
+  $('sc-public').textContent  = fmtNum(pub.length);
+  $('sc-private').textContent = fmtNum(prv.length);
+  $('sc-attack').textContent  = fmtNum(attacks);
+  $('sc-normal').textContent  = fmtNum(normal);
+  $('sc-topip').textContent   = ALL_DATA[0]?.ip || '—';
+  $('sc-highrisk').textContent = fmtNum(highRisk);
+
+  renderCharts(pub, prv);
+  show('chartsGrid');
+  applyFilters();
+  show('tableSection');
+  renderCards(ALL_DATA.slice(0, 30));
+  show('cardsSection');
+  show('actionBar');
+  $('analysisTimestamp').textContent = `تاريخ التحليل: ${new Date().toLocaleString('ar')}`;
+  showToast('✅ اكتمل التحليل بنجاح!');
+}
+
+// ─── Charts ──────────────────────────────────────────────────
+function renderCharts(pub, prv) {
+  const palette = ['#38bdf8','#818cf8','#22c55e','#f59e0b','#ef4444','#ec4899','#14b8a6','#a855f7','#f97316','#06b6d4'];
+
+  const highC   = ALL_DATA.filter(d => d.threat === 'عالي').length;
+  const midC    = ALL_DATA.filter(d => d.threat === 'متوسط').length;
+  const lowC    = ALL_DATA.filter(d => d.threat === 'منخفض').length;
+  const attacks = ALL_DATA.filter(d => d.behavior.label === 'مشبوه').length;
+  const normal  = ALL_DATA.length - attacks;
+
+  // Aggregate methods / statuses / paths
+  const methodMap = {}, statusMap = {}, pathMap = {};
+  for (const d of ALL_DATA) {
+    for (const [k, v] of Object.entries(d.methods))  methodMap[k]  = (methodMap[k]  || 0) + v;
+    for (const [k, v] of Object.entries(d.statuses)) statusMap[k]  = (statusMap[k]  || 0) + v;
+    for (const [k, v] of Object.entries(d.paths))    pathMap[k]    = (pathMap[k]    || 0) + v;
+  }
+  const topMethods  = sortTop(methodMap, 6);
+  const topStatuses = sortTop(statusMap, 6);
+  const topPaths    = sortTop(pathMap, 8);
+  const top10IPs    = ALL_DATA.slice(0, 10);
+
+  const chartCfg = (type, labels, data, colors, opts = {}) => ({
+    type,
+    data: { labels, datasets: [{ data, backgroundColor: colors || palette, borderColor: 'transparent' }] },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+      scales: type === 'bar' ? {
+        x: { ticks: { color: '#94a3b8', font: { size: 10 } } },
+        y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+      } : {},
+      ...opts
+    }
+  });
+
+  destroyChart('chartThreat');
+  CHARTS['chartThreat'] = new Chart($('chartThreat'), chartCfg('doughnut',
+    ['عالي', 'متوسط', 'منخفض'], [highC, midC, lowC],
+    ['#ef4444', '#f59e0b', '#22c55e']));
+
+  destroyChart('chartBehavior');
+  CHARTS['chartBehavior'] = new Chart($('chartBehavior'), chartCfg('pie',
+    ['هجوم / مشبوه', 'طبيعي'], [attacks, normal],
+    ['#ef4444', '#22c55e']));
+
+  destroyChart('chartTopIPs');
+  CHARTS['chartTopIPs'] = new Chart($('chartTopIPs'), {
+    type: 'bar',
+    data: {
+      labels: top10IPs.map(d => d.ip),
+      datasets: [{ label: 'عدد الطلبات', data: top10IPs.map(d => d.count),
+        backgroundColor: top10IPs.map(d => d.behavior.label === 'مشبوه' ? '#ef4444' : '#38bdf8'),
+        borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+        y: { ticks: { color: '#38bdf8', font: { size: 10 } } }
+      }
+    }
+  });
+
+  destroyChart('chartMethods');
+  CHARTS['chartMethods'] = new Chart($('chartMethods'), chartCfg('bar',
+    topMethods.map(x => x[0]), topMethods.map(x => x[1]), palette));
+
+  destroyChart('chartStatuses');
+  CHARTS['chartStatuses'] = new Chart($('chartStatuses'), chartCfg('doughnut',
+    topStatuses.map(x => x[0]), topStatuses.map(x => x[1]), palette));
+
+  destroyChart('chartPaths');
+  CHARTS['chartPaths'] = new Chart($('chartPaths'), {
+    type: 'bar',
+    data: {
+      labels: topPaths.map(x => x[0].slice(0, 30)),
+      datasets: [{ label: 'طلبات', data: topPaths.map(x => x[1]),
+        backgroundColor: '#818cf8', borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 9 } } }
+      }
+    }
+  });
+}
+
+function destroyChart(id) {
+  if (CHARTS[id]) { CHARTS[id].destroy(); delete CHARTS[id]; }
+}
+
+// ─── Table ───────────────────────────────────────────────────
+function applyFilters() {
+  const search = $('searchBar').value.toLowerCase();
+  FILTERED = ALL_DATA.filter(d => {
+    if (currentFilter === 'attack'  && d.behavior.label !== 'مشبوه') return false;
+    if (currentFilter === 'normal'  && d.behavior.label !== 'طبيعي') return false;
+    if (currentFilter === 'high'    && d.threat !== 'عالي')  return false;
+    if (currentFilter === 'mid'     && d.threat !== 'متوسط') return false;
+    if (currentFilter === 'low'     && d.threat !== 'منخفض') return false;
+    if (currentFilter === 'public'  && d.isPrivate)  return false;
+    if (currentFilter === 'private' && !d.isPrivate) return false;
+    if (search) {
+      const hay = (d.ip + d.country + d.city + d.isp + d.behavior.label + d.threat).toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+  currentPage = 1;
+  renderTable();
+  renderPagination();
+}
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+
+function renderTable() {
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const rows = FILTERED.slice(start, start + PAGE_SIZE);
+  const maxC = Math.max(...ALL_DATA.map(d => d.count), 1);
+  let html = '';
+  rows.forEach((d, i) => {
+    const rank = start + i + 1;
+    const bCls = d.behavior.label === 'مشبوه' ? 'badge-attack' : 'badge-normal';
+    const bLbl = d.behavior.label === 'مشبوه' ? 'هجوم' : 'طبيعي';
+    const tCls = d.threat === 'عالي' ? 'badge-high' : d.threat === 'متوسط' ? 'badge-mid' : 'badge-low';
+    const share = TOTAL_LINES ? (d.count / TOTAL_LINES * 100).toFixed(1) : '0.0';
+    const topM = sortTop(d.methods, 3).map(x => `${x[0]}(${x[1]})`).join(' ');
+    const topS = sortTop(d.statuses, 3).map(x => `${x[0]}(${x[1]})`).join(' ');
+    const loc = d.country + (d.city ? `، ${d.city}` : '');
+    html += `<tr>
+      <td class="td-rank">${rank}</td>
+      <td class="td-ip">${esc(d.ip)}</td>
+      <td><span class="badge ${bCls}">${bLbl}</span></td>
+      <td><span class="badge ${tCls}">${d.threat}</span></td>
+      <td class="td-count">${fmtNum(d.count)}</td>
+      <td class="td-muted">${share}%</td>
+      <td class="td-muted">${esc(loc.slice(0, 40))}</td>
+      <td class="td-muted">${esc(topM.slice(0, 40))}</td>
+      <td class="td-muted">${esc(topS.slice(0, 40))}</td>
+    </tr>`;
+  });
+  $('tableBody').innerHTML = html || '<tr><td colspan="9" style="color:var(--muted);padding:1.5rem">لا توجد نتائج</td></tr>';
+}
+
+function renderPagination() {
+  const totalPages = Math.ceil(FILTERED.length / PAGE_SIZE);
+  let html = '';
+  for (let p = 1; p <= Math.min(totalPages, 15); p++) {
+    html += `<button class="page-btn${p === currentPage ? ' active' : ''}" onclick="goPage(${p})">${p}</button>`;
+  }
+  if (totalPages > 15) html += `<span style="color:var(--muted);font-size:0.85rem">… ${fmtNum(totalPages)} صفحة</span>`;
+  $('pagination').innerHTML = html;
+}
+
+function goPage(p) { currentPage = p; renderTable(); renderPagination(); }
+
+// ─── IP Cards ────────────────────────────────────────────────
+function renderCards(items) {
+  const maxC = Math.max(...ALL_DATA.map(d => d.count), 1);
+  let html = '';
+  items.forEach((d, i) => {
+    const rank = i + 1;
+    const bCls = d.behavior.label === 'مشبوه' ? 'b-attack' : 'b-normal';
+    const bLbl = d.behavior.label === 'مشبوه' ? '⚠ هجوم / مشبوه' : '✓ دخول طبيعي';
+    const tCls = d.threat === 'عالي' ? 'badge-high' : d.threat === 'متوسط' ? 'badge-mid' : 'badge-low';
+    const pct = (d.count / maxC * 100).toFixed(1);
+    const share = TOTAL_LINES ? (d.count / TOTAL_LINES * 100).toFixed(1) : '0.0';
+    const loc = d.country + (d.city ? `، ${d.city}` : '') + (d.regionName ? `، ${d.regionName}` : '');
+
+    // Geo rows
+    let geoRows = '';
+    if (d.isPrivate) {
+      geoRows = `<tr><td colspan="2" style="color:#fbbf24;font-size:0.82rem;padding:0.4rem 0">عنوان داخلي — لا يوجد موقع عام</td></tr>`;
+    } else {
+      for (const [lbl, val] of [['الدولة', d.country], ['المدينة', d.city || '—'], ['المنطقة', d.regionName || '—'], ['ISP', d.isp || '—']]) {
+        geoRows += `<tr><td class="dl">${lbl}</td><td class="dv">${esc(val)}</td></tr>`;
+      }
+    }
+
+    // Log analysis rows
+    const topM = sortTop(d.methods, 5);
+    const topP = sortTop(d.paths, 5);
+    const topS = sortTop(d.statuses, 5);
+    if (topM.length) geoRows += `<tr><td class="dl">الطرق</td><td class="dv" style="font-size:0.82rem">${topM.map(x => `${x[0]}(${x[1]})`).join(', ')}</td></tr>`;
+    if (topP.length) geoRows += `<tr><td class="dl">أهم المسارات</td><td class="dv" style="font-size:0.82rem">${topP.map(x => esc(x[0].slice(0,30)) + `(${x[1]})`).join(', ')}</td></tr>`;
+    if (topS.length) geoRows += `<tr><td class="dl">أكواد الاستجابة</td><td class="dv" style="font-size:0.82rem">${topS.map(x => `${x[0]}(${x[1]})`).join(', ')}</td></tr>`;
+
+    // Usernames
+    if (d.usernames.length) {
+      geoRows += `<tr><td class="dl">اليوزرنيم</td><td class="dv">${d.usernames.slice(0,5).map(esc).join(', ')}</td></tr>`;
+    }
+
+    // Samples
+    const samplesHtml = d.samples.slice(0, 5).map(s => `<div class="log-line">${esc(s)}</div>`).join('') || '—';
+
+    html += `
+    <div class="ip-card">
+      <div class="ip-card-head">
+        <span class="ip-card-rank">#${rank}</span>
+        <span class="ip-card-addr">${esc(d.ip)}</span>
+        <span class="badge ${d.behavior.label === 'مشبوه' ? 'badge-attack' : 'badge-normal'}">${d.behavior.label === 'مشبوه' ? 'هجوم' : 'طبيعي'}</span>
+        <span class="badge ${tCls}">تهديد: ${d.threat}</span>
+        <span class="ip-card-events">${fmtNum(d.count)} حدث</span>
+        <span class="ip-card-share">(${share}%)</span>
+      </div>
+      <div class="ip-bar"><div class="ip-bar-fill" style="width:${pct}%"></div></div>
+      <div class="ip-card-meta">
+        <span class="meta-loc">📍 ${esc(loc || '—')}</span>
+        <span class="meta-isp">${d.isp ? 'ISP: ' + esc(d.isp) : ''}</span>
+        <span class="meta-behavior ${bCls}">${bLbl}${d.behavior.reasons.length ? ' — ' + esc(d.behavior.reasons[0]) : ''}</span>
+      </div>
+      <div class="ip-card-body">
+        <div>
+          <h4>الموقع والبيانات</h4>
+          <table class="data-table"><tbody>${geoRows}</tbody></table>
+        </div>
+        <div class="ip-log-block">
+          <h4>عينة من سجلات اللوق</h4>
+          <div class="log-samples">${samplesHtml}</div>
+        </div>
+      </div>
+    </div>`;
+  });
+  $('ipCards').innerHTML = html;
+}
+
+// ─── Export ──────────────────────────────────────────────────
+function exportJSON() {
+  const data = { total_lines: TOTAL_LINES, unique_ips: ALL_DATA.length, timestamp: new Date().toISOString(), ips: ALL_DATA };
+  download(JSON.stringify(data, null, 2), 'log_analysis.json', 'application/json');
+}
+
+function exportCSV() {
+  const header = ['IP','نوع','مستوى التهديد','الطلبات','النسبة%','الدولة','المدينة','ISP'];
+  const rows = ALL_DATA.map(d => [
+    d.ip,
+    d.behavior.label,
+    d.threat,
+    d.count,
+    TOTAL_LINES ? (d.count / TOTAL_LINES * 100).toFixed(2) : '0',
+    d.country, d.city, d.isp
+  ].map(v => `"${String(v).replace(/"/g, '""')}"`));
+  const csv = [header.join(','), ...rows.map(r => r.join(','))].join('\n');
+  download(csv, 'log_analysis.csv', 'text/csv');
+}
+
+function download(content, filename, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = filename;
+  a.click();
+}
+
+// ─── Reset ───────────────────────────────────────────────────
+function resetAll() {
+  ALL_DATA = []; TOTAL_LINES = 0; FILTERED = []; currentFilter = 'all'; currentPage = 1;
+  ['summaryGrid','chartsGrid','tableSection','cardsSection','actionBar'].forEach(id => hide(id));
+  $('fileInfo').textContent = '';
+  $('searchBar').value = '';
+  fileInput.value = '';
+  Object.keys(CHARTS).forEach(k => { CHARTS[k].destroy(); delete CHARTS[k]; });
+  showProgress(false);
+}
+
+// ─── Helpers ─────────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+function show(id) { $(id).classList.remove('hidden'); }
+function hide(id) { $(id).classList.add('hidden'); }
+function fmtNum(n) { return n.toLocaleString('ar'); }
+function fmtSize(b) {
+  if (b >= 1073741824) return (b / 1073741824).toFixed(2) + ' GB';
+  if (b >= 1048576)    return (b / 1048576).toFixed(2)    + ' MB';
+  return (b / 1024).toFixed(1) + ' KB';
+}
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function sortTop(obj, n) {
+  return Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n);
+}
+function showProgress(show) {
+  const w = $('progressWrap');
+  if (show) w.style.display = 'block'; else w.style.display = 'none';
+}
+function setProgress(pct, label, sub) {
+  $('progressBar').style.width = pct + '%';
+  if (label) $('progressLabel').textContent = label;
+  if (sub !== undefined) $('progressText').textContent = sub;
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.add('hidden'), 3000);
+}
+</script>
+</body>
+</html>
